@@ -108,7 +108,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         >
           {/* Logo */}
           <div className="bg-[#DAA520] px-5 py-4">
-            <h1 className="text-xl font-bold text-white text-balance">Mi Tienda</h1>
+            <h1 className="text-xl font-bold text-white text-balance">ShellDB</h1>
             <p className="text-xs text-white/80 mt-0.5">{session.username}</p>
             <p className="text-[10px] text-white/60">BD: {session.userDbName}</p>
           </div>
@@ -194,7 +194,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
               </svg>
             </button>
-            <h1 className="text-base font-bold">Mi Tienda</h1>
+            <h1 className="text-base font-bold">ShellDB</h1>
             <span className="text-xs">{session.username}</span>
           </header>
 

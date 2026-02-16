@@ -29,10 +29,11 @@ export async function createSession(payload: SessionPayload): Promise<void> {
     .setIssuedAt()
     .sign(JWT_SECRET)
 
+  const isProduction = process.env.NODE_ENV === "production"
   const cookieStore = await cookies()
   cookieStore.set(COOKIE_NAME, token, {
     httpOnly: true,
-    secure: false,
+    secure: isProduction,
     sameSite: "lax",
     maxAge: 60 * 60 * 24,
     path: "/",

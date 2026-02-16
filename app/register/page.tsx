@@ -72,7 +72,7 @@ export default function RegisterPage() {
               <line x1="22" x2="16" y1="11" y2="11" />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-[#2C3E50]">Registro</h1>
+          <h1 className="text-2xl font-bold text-[#2C3E50]">ShellDB - Registro</h1>
           <p className="text-sm text-[#6B7280]">Crea tu cuenta con codigo de activacion</p>
         </CardHeader>
         <CardContent>

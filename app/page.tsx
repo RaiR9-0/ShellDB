@@ -58,7 +58,7 @@ export default function LoginPage() {
               <path d="M16 10a4 4 0 0 1-8 0" />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-[#2C3E50]">Mi Tienda</h1>
+          <h1 className="text-2xl font-bold text-[#2C3E50]">ShellDB</h1>
           <p className="text-sm text-[#6B7280]">Sistema de Abarrotes</p>
         </CardHeader>
         <CardContent>

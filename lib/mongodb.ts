@@ -1,7 +1,12 @@
 import { MongoClient, type Db } from "mongodb"
 
-const ATLAS_URI =
-  "mongodb+srv://jorgefranciscodlc:74VzN1777@clustershellx.rjbicmn.mongodb.net/?appName=ClusterShellx"
+const ATLAS_URI = process.env.MONGODB_URI || ""
+
+if (!ATLAS_URI) {
+  throw new Error(
+    "La variable de entorno MONGODB_URI no esta definida. Agregala en Render > Environment."
+  )
+}
 
 let client: MongoClient | null = null
 let clientPromise: Promise<MongoClient> | null = null

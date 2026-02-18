@@ -2,7 +2,9 @@ import { SignJWT, jwtVerify } from "jose"
 import { cookies } from "next/headers"
 import bcrypt from "bcryptjs"
 
-const JWT_SECRET = new TextEncoder().encode("tienda-shellx-secret-key-2024")
+const JWT_SECRET = new TextEncoder().encode(
+  process.env.JWT_SECRET || "tienda-shellx-secret-key-2024"
+)
 const COOKIE_NAME = "tienda_session"
 
 export async function hashPassword(password: string): Promise<string> {

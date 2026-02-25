@@ -37,6 +37,8 @@ export async function GET(
     items_count: venta.items_count,
     sucursal_codigo: venta.sucursal_codigo,
     usuario: venta.usuario,
+    empleado_codigo: venta.empleado_codigo || null,
+    empleado_nombre: venta.empleado_nombre || null,
     detalles: detalles.map((d) => ({
       producto_codigo: d.producto_codigo,
       producto_nombre: d.producto_nombre,

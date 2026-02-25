@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { getSession } from "@/lib/auth"
 import { getUserDb } from "@/lib/mongodb"
+import bcrypt from "bcryptjs"
 
 export async function PUT(
   request: Request,
@@ -13,17 +14,22 @@ export async function PUT(
   const body = await request.json()
   const db = await getUserDb(session.userDbName)
 
+  const updateFields: Record<string, unknown> = {
+    nombre: body.nombre,
+    puesto: body.puesto,
+    sucursal_codigo: body.sucursal_codigo,
+    telefono: body.telefono,
+    salario: Number(body.salario),
+  }
+
+  // Solo actualizar clave si se envio una nueva
+  if (body.clave && body.clave.length >= 4) {
+    updateFields.clave = await bcrypt.hash(body.clave, 10)
+  }
+
   await db.collection("empleados").updateOne(
     { codigo },
-    {
-      $set: {
-        nombre: body.nombre,
-        puesto: body.puesto,
-        sucursal_codigo: body.sucursal_codigo,
-        telefono: body.telefono,
-        salario: Number(body.salario),
-      },
-    }
+    { $set: updateFields }
   )
   return NextResponse.json({ success: true })
 }

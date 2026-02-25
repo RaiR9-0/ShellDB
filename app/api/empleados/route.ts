@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { getSession } from "@/lib/auth"
 import { getUserDb } from "@/lib/mongodb"
+import bcrypt from "bcryptjs"
 
 export async function GET() {
   const session = await getSession()
@@ -18,6 +19,7 @@ export async function GET() {
       sucursal_codigo: e.sucursal_codigo,
       telefono: e.telefono,
       salario: e.salario,
+      tiene_clave: !!e.clave,
     }))
   )
 }
@@ -27,7 +29,16 @@ export async function POST(request: Request) {
   if (!session) return NextResponse.json({ error: "No autenticado" }, { status: 401 })
 
   const body = await request.json()
+
+  if (!body.clave || body.clave.length < 4) {
+    return NextResponse.json(
+      { error: "La clave debe tener al menos 4 caracteres" },
+      { status: 400 }
+    )
+  }
+
   const db = await getUserDb(session.userDbName)
+  const claveHash = await bcrypt.hash(body.clave, 10)
 
   await db.collection("empleados").insertOne({
     codigo: body.codigo,
@@ -36,6 +47,7 @@ export async function POST(request: Request) {
     sucursal_codigo: body.sucursal_codigo,
     telefono: body.telefono || "",
     salario: Number(body.salario) || 0,
+    clave: claveHash,
     activo: true,
   })
 

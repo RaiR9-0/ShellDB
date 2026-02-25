@@ -7,8 +7,8 @@ const _geist = Geist({ subsets: ["latin"] });
 const _geistMono = Geist_Mono({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'ShellDB - Sistema de Abarrotes',
-  description: 'ShellDB: Sistema de gestion de tienda de abarrotes con inventario, ventas y compras',
+  title: 'ShellDB - Documento Tecnico',
+  description: 'Documento tecnico del sistema ShellDB - Sistema de Gestion de Tienda de Abarrotes',
   generator: 'v0.app',
   icons: {
     icon: [

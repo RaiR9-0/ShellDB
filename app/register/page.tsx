@@ -161,7 +161,7 @@ export default function RegisterPage() {
                 value={form.activationCode}
                 onChange={(e) => update("activationCode", e.target.value)}
                 required
-                placeholder="Ej: ACT001, DEMO2024"
+                placeholder=""
                 className="border-[#D4A017] bg-white text-[#2C3E50] focus-visible:ring-[#B8860B] uppercase"
               />
             </div>

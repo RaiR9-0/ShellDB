@@ -1,22 +1,15 @@
-import { NextResponse } from "next/server"
-import { getSession } from "@/lib/auth"
-import { getUserDb } from "@/lib/mongodb"
+import { withAuth, jsonResponse, successResponse, buildCodeMap, insertDoc } from "@/lib/api-helpers"
 
-export async function GET(request: Request) {
-  const session = await getSession()
-  if (!session) return NextResponse.json({ error: "No autenticado" }, { status: 401 })
-
+export const GET = withAuth(async ({ db }, request) => {
   const { searchParams } = new URL(request.url)
   const sucursal = searchParams.get("sucursal") || "SUC001"
 
-  const db = await getUserDb(session.userDbName)
-  const productos = await db.collection("productos").find({ activo: true }).toArray()
-  const categorias = await db.collection("categorias").find({}).toArray()
+  const [productos, catMap] = await Promise.all([
+    db.collection("productos").find({ activo: true }).toArray(),
+    buildCodeMap(db, "categorias"),
+  ])
 
-  const catMap: Record<string, string> = {}
-  for (const c of categorias) catMap[c.codigo as string] = c.nombre as string
-
-  return NextResponse.json(
+  return jsonResponse(
     productos.map((p) => ({
       _id: String(p._id),
       codigo: p.codigo,
@@ -29,14 +22,10 @@ export async function GET(request: Request) {
       stock_minimo: p.stock_minimo,
     }))
   )
-}
+})
 
-export async function POST(request: Request) {
-  const session = await getSession()
-  if (!session) return NextResponse.json({ error: "No autenticado" }, { status: 401 })
-
+export const POST = withAuth(async ({ db }, request) => {
   const body = await request.json()
-  const db = await getUserDb(session.userDbName)
 
   // Get all sucursales for initial stock
   const sucursales = await db.collection("sucursales").find({ activa: true }).toArray()
@@ -45,7 +34,7 @@ export async function POST(request: Request) {
     stockPorSucursal[s.codigo as string] = body.stock_inicial ?? 0
   }
 
-  await db.collection("productos").insertOne({
+  await insertDoc(db, "productos", {
     codigo: body.codigo,
     nombre: body.nombre,
     categoria_codigo: body.categoria_codigo,
@@ -56,5 +45,5 @@ export async function POST(request: Request) {
     activo: true,
   })
 
-  return NextResponse.json({ success: true })
-}
+  return successResponse()
+})

@@ -1,22 +1,16 @@
-import { NextResponse } from "next/server"
-import { getSession } from "@/lib/auth"
-import { getUserDb } from "@/lib/mongodb"
+import { withAuth, jsonResponse, errorResponse } from "@/lib/api-helpers"
 
-export async function GET(request: Request) {
-  const session = await getSession()
-  if (!session) return NextResponse.json({ error: "No autenticado" }, { status: 401 })
-
+export const GET = withAuth(async ({ db }, request) => {
   const { searchParams } = new URL(request.url)
   const sucursal = searchParams.get("sucursal") || "SUC001"
 
-  const db = await getUserDb(session.userDbName)
   const compras = await db
     .collection("compras")
     .find({ sucursal_codigo: sucursal })
     .sort({ fecha: -1 })
     .toArray()
 
-  return NextResponse.json(
+  return jsonResponse(
     compras.map((c) => ({
       _id: String(c._id),
       fecha: c.fecha,
@@ -27,20 +21,14 @@ export async function GET(request: Request) {
       sucursal_codigo: c.sucursal_codigo,
     }))
   )
-}
+})
 
-export async function POST(request: Request) {
-  const session = await getSession()
-  if (!session) return NextResponse.json({ error: "No autenticado" }, { status: 401 })
-
-  const { sucursal_codigo, proveedor_codigo, proveedor_nombre, items } =
-    await request.json()
+export const POST = withAuth(async ({ session, db }, request) => {
+  const { sucursal_codigo, proveedor_codigo, proveedor_nombre, items } = await request.json()
 
   if (!items || items.length === 0) {
-    return NextResponse.json({ error: "No hay items en la compra" }, { status: 400 })
+    return errorResponse("No hay items en la compra")
   }
-
-  const db = await getUserDb(session.userDbName)
 
   const total = items.reduce(
     (sum: number, it: { precio_compra: number; cantidad: number }) =>
@@ -55,7 +43,7 @@ export async function POST(request: Request) {
     fecha: new Date(),
     total,
     items_count: items.length,
-    usuario: session.username,
+    usuario: session.user,
   })
 
   for (const item of items) {
@@ -68,7 +56,6 @@ export async function POST(request: Request) {
       subtotal: item.precio_compra * item.cantidad,
     })
 
-    // INCREASE stock
     await db.collection("productos").updateOne(
       { codigo: item.codigo },
       { $inc: { [`stock_por_sucursal.${sucursal_codigo}`]: item.cantidad } }
@@ -83,9 +70,9 @@ export async function POST(request: Request) {
       cantidad: item.cantidad,
       fecha: new Date(),
       referencia_id: compraResult.insertedId,
-      usuario: session.username,
+      usuario: session.user,
     })
   }
 
-  return NextResponse.json({ success: true, compra_id: String(compraResult.insertedId) })
-}
+  return jsonResponse({ success: true, compra_id: String(compraResult.insertedId) })
+})

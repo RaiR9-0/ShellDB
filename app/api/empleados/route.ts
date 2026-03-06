@@ -1,17 +1,9 @@
-import { NextResponse } from "next/server"
-import { getSession } from "@/lib/auth"
-import { getUserDb } from "@/lib/mongodb"
 import bcrypt from "bcryptjs"
+import { withAuth, jsonResponse, successResponse, errorResponse, getList, insertDoc } from "@/lib/api-helpers"
 
-export async function GET() {
-  const session = await getSession()
-  if (!session) return NextResponse.json({ error: "No autenticado" }, { status: 401 })
-
-  const db = await getUserDb(session.userDbName)
-  const empleados = await db.collection("empleados").find({ activo: true }).toArray()
-
-  return NextResponse.json(
-    empleados.map((e) => ({
+export const GET = withAuth(async ({ db }) => {
+  const empleados = await getList(db, "empleados", {
+    transform: (e) => ({
       _id: String(e._id),
       codigo: e.codigo,
       nombre: e.nombre,
@@ -20,27 +12,21 @@ export async function GET() {
       telefono: e.telefono,
       salario: e.salario,
       tiene_clave: !!e.clave,
-    }))
-  )
-}
+    }),
+  })
+  return jsonResponse(empleados)
+})
 
-export async function POST(request: Request) {
-  const session = await getSession()
-  if (!session) return NextResponse.json({ error: "No autenticado" }, { status: 401 })
-
+export const POST = withAuth(async ({ db }, request) => {
   const body = await request.json()
 
   if (!body.clave || body.clave.length < 4) {
-    return NextResponse.json(
-      { error: "La clave debe tener al menos 4 caracteres" },
-      { status: 400 }
-    )
+    return errorResponse("La clave debe tener al menos 4 caracteres")
   }
 
-  const db = await getUserDb(session.userDbName)
   const claveHash = await bcrypt.hash(body.clave, 10)
 
-  await db.collection("empleados").insertOne({
+  await insertDoc(db, "empleados", {
     codigo: body.codigo,
     nombre: body.nombre,
     puesto: body.puesto,
@@ -51,5 +37,5 @@ export async function POST(request: Request) {
     activo: true,
   })
 
-  return NextResponse.json({ success: true })
-}
+  return successResponse()
+})

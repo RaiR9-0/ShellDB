@@ -1,39 +1,27 @@
-import { NextResponse } from "next/server"
-import { getSession } from "@/lib/auth"
-import { getUserDb } from "@/lib/mongodb"
+import { withAuth, jsonResponse, successResponse, getList, insertDoc } from "@/lib/api-helpers"
 
-export async function GET() {
-  const session = await getSession()
-  if (!session) return NextResponse.json({ error: "No autenticado" }, { status: 401 })
-
-  const db = await getUserDb(session.userDbName)
-  const sucursales = await db.collection("sucursales").find({ activa: true }).toArray()
-
-  return NextResponse.json(
-    sucursales.map((s) => ({
+export const GET = withAuth(async ({ db }) => {
+  const sucursales = await getList(db, "sucursales", {
+    filter: { activa: true },
+    transform: (s) => ({
       _id: String(s._id),
       codigo: s.codigo,
       nombre: s.nombre,
       direccion: s.direccion,
       telefono: s.telefono,
-    }))
-  )
-}
+    }),
+  })
+  return jsonResponse(sucursales)
+})
 
-export async function POST(request: Request) {
-  const session = await getSession()
-  if (!session) return NextResponse.json({ error: "No autenticado" }, { status: 401 })
-
+export const POST = withAuth(async ({ db }, request) => {
   const body = await request.json()
-  const db = await getUserDb(session.userDbName)
-
-  await db.collection("sucursales").insertOne({
+  await insertDoc(db, "sucursales", {
     codigo: body.codigo,
     nombre: body.nombre,
     direccion: body.direccion || "",
     telefono: body.telefono || "",
     activa: true,
   })
-
-  return NextResponse.json({ success: true })
-}
+  return successResponse()
+})

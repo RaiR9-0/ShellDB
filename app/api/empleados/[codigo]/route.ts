@@ -1,18 +1,8 @@
-import { NextResponse } from "next/server"
-import { getSession } from "@/lib/auth"
-import { getUserDb } from "@/lib/mongodb"
 import bcrypt from "bcryptjs"
+import { withAuthParams, successResponse, updateByField, softDelete } from "@/lib/api-helpers"
 
-export async function PUT(
-  request: Request,
-  { params }: { params: Promise<{ codigo: string }> }
-) {
-  const session = await getSession()
-  if (!session) return NextResponse.json({ error: "No autenticado" }, { status: 401 })
-
-  const { codigo } = await params
+export const PUT = withAuthParams<{ codigo: string }>(async ({ db }, request, { codigo }) => {
   const body = await request.json()
-  const db = await getUserDb(session.userDbName)
 
   const updateFields: Record<string, unknown> = {
     nombre: body.nombre,
@@ -27,23 +17,11 @@ export async function PUT(
     updateFields.clave = await bcrypt.hash(body.clave, 10)
   }
 
-  await db.collection("empleados").updateOne(
-    { codigo },
-    { $set: updateFields }
-  )
-  return NextResponse.json({ success: true })
-}
+  await updateByField(db, "empleados", "codigo", codigo, updateFields)
+  return successResponse()
+})
 
-export async function DELETE(
-  _request: Request,
-  { params }: { params: Promise<{ codigo: string }> }
-) {
-  const session = await getSession()
-  if (!session) return NextResponse.json({ error: "No autenticado" }, { status: 401 })
-
-  const { codigo } = await params
-  const db = await getUserDb(session.userDbName)
-
-  await db.collection("empleados").updateOne({ codigo }, { $set: { activo: false } })
-  return NextResponse.json({ success: true })
-}
+export const DELETE = withAuthParams<{ codigo: string }>(async ({ db }, _request, { codigo }) => {
+  await softDelete(db, "empleados", "codigo", codigo)
+  return successResponse()
+})

@@ -1,28 +1,17 @@
-import { NextResponse } from "next/server"
 import { ObjectId } from "mongodb"
-import { getSession } from "@/lib/auth"
-import { getUserDb } from "@/lib/mongodb"
+import { withAuthParams, jsonResponse, errorResponse } from "@/lib/api-helpers"
 
-export async function GET(
-  _request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const session = await getSession()
-  if (!session) return NextResponse.json({ error: "No autenticado" }, { status: 401 })
-
-  const { id } = await params
-  const db = await getUserDb(session.userDbName)
-
+export const GET = withAuthParams<{ id: string }>(async ({ db }, _request, { id }) => {
   let objectId: ObjectId
   try {
     objectId = new ObjectId(id)
   } catch {
-    return NextResponse.json({ error: "ID de venta invalido" }, { status: 400 })
+    return errorResponse("ID de venta invalido")
   }
 
   const venta = await db.collection("ventas").findOne({ _id: objectId })
   if (!venta) {
-    return NextResponse.json({ error: "Venta no encontrada" }, { status: 404 })
+    return errorResponse("Venta no encontrada", 404)
   }
 
   const detalles = await db
@@ -30,7 +19,7 @@ export async function GET(
     .find({ venta_id: objectId })
     .toArray()
 
-  return NextResponse.json({
+  return jsonResponse({
     _id: String(venta._id),
     fecha: venta.fecha,
     total: venta.total,
@@ -47,4 +36,4 @@ export async function GET(
       subtotal: d.subtotal,
     })),
   })
-}
+})

@@ -14,6 +14,7 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table"
+import { generarPdfTicket } from "@/components/owner-pin"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -25,53 +26,24 @@ interface ItemVenta {
   codigo: string; nombre: string; precio_venta: number; cantidad: number; stock: number
 }
 
-interface EmpleadoAutorizado {
-  codigo: string
-  nombre: string
-  clave: string
-}
-
 export default function NuevaVentaPage() {
   const router = useRouter()
   const { sucursal } = useDashboard()
-  const { data: productos } = useSWR<Producto[]>(`/api/productos?sucursal=${sucursal}`, fetcher)
+  const { data: productos } = useSWR<Producto[]>(
+    `/api/productos?sucursal=${sucursal}`,
+    fetcher
+  )
 
-  // --- Identificacion de empleado (obligatoria al entrar) ---
-  const [empleado, setEmpleado] = useState<EmpleadoAutorizado | null>(null)
-  const [authOpen, setAuthOpen] = useState(true)
-  const [empCodigo, setEmpCodigo] = useState("")
-  const [empClave, setEmpClave] = useState("")
-  const [authError, setAuthError] = useState("")
-  const [authLoading, setAuthLoading] = useState(false)
-
-  // --- Venta ---
   const [items, setItems] = useState<ItemVenta[]>([])
   const [search, setSearch] = useState("")
   const [processing, setProcessing] = useState(false)
   const [error, setError] = useState("")
-  const [confirmOpen, setConfirmOpen] = useState(false)
 
-  async function autorizarEmpleado() {
-    if (!empCodigo.trim()) { setAuthError("Ingresa tu codigo de empleado"); return }
-    if (!empClave.trim()) { setAuthError("Ingresa tu clave"); return }
-    setAuthLoading(true)
-    setAuthError("")
-    try {
-      const res = await fetch("/api/empleados/verificar", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ codigo: empCodigo.trim(), clave: empClave }),
-      })
-      const data = await res.json()
-      if (!res.ok) { setAuthError(data.error || "Credenciales incorrectas"); return }
-      setEmpleado({ codigo: empCodigo.trim(), nombre: data.nombre, clave: empClave })
-      setAuthOpen(false)
-    } catch {
-      setAuthError("Error de conexion")
-    } finally {
-      setAuthLoading(false)
-    }
-  }
+  // --- Estado del dialog de autorizacion ---
+  const [authOpen, setAuthOpen] = useState(false)
+  const [empCodigo, setEmpCodigo] = useState("")
+  const [empClave, setEmpClave] = useState("")
+  const [authError, setAuthError] = useState("")
 
   const filtered = (productos || []).filter(
     (p) =>
@@ -90,7 +62,8 @@ export default function NuevaVentaPage() {
   function updateQty(codigo: string, qty: number) {
     setItems(items.map((i) => {
       if (i.codigo !== codigo) return i
-      return { ...i, cantidad: Math.max(1, Math.min(qty, i.stock)) }
+      const cantidad = Math.max(1, Math.min(qty, i.stock))
+      return { ...i, cantidad }
     }))
   }
 
@@ -100,10 +73,22 @@ export default function NuevaVentaPage() {
 
   const total = items.reduce((s, i) => s + i.precio_venta * i.cantidad, 0)
 
-  async function procesarVenta() {
+  // Abrir dialog de autorizacion en lugar de procesar directo
+  function solicitarAutorizacion() {
     if (items.length === 0) { setError("Agrega al menos un producto"); return }
+    setEmpCodigo("")
+    setEmpClave("")
+    setAuthError("")
+    setAuthOpen(true)
+  }
+
+  // Procesar venta con credenciales de empleado
+  async function procesarVentaConAutorizacion() {
+    if (!empCodigo.trim()) { setAuthError("Ingresa el codigo de empleado"); return }
+    if (!empClave.trim()) { setAuthError("Ingresa la clave"); return }
+
     setProcessing(true)
-    setError("")
+    setAuthError("")
     try {
       const res = await fetch("/api/ventas", {
         method: "POST",
@@ -111,115 +96,38 @@ export default function NuevaVentaPage() {
         body: JSON.stringify({
           sucursal_codigo: sucursal,
           items,
-          empleado_codigo: empleado!.codigo,
-          empleado_clave: empleado!.clave,
+          empleado_codigo: empCodigo.trim(),
+          empleado_clave: empClave,
         }),
       })
       const data = await res.json()
-      if (!res.ok) { setError(data.error || "Error al procesar la venta"); setConfirmOpen(false); return }
+      if (!res.ok) {
+        setAuthError(data.error || "Error al procesar la venta")
+        return
+      }
+      setAuthOpen(false)
+      generarPdfTicket({
+        tipo: "venta",
+        id: data.venta_id || Date.now().toString(),
+        fecha: new Date(),
+        sucursal,
+        empleado: empCodigo.trim(),
+        items: items.map((i) => ({ nombre: i.nombre, cantidad: i.cantidad, precio: i.precio_venta, subtotal: i.precio_venta * i.cantidad })),
+        total,
+      })
       router.push("/dashboard/ventas")
     } catch {
-      setError("Error de conexion")
+      setAuthError("Error de conexion")
     } finally {
       setProcessing(false)
-      setConfirmOpen(false)
     }
   }
 
   return (
     <div>
-      {/* Dialog de identificacion — se abre al entrar, no se puede cerrar sin autenticar */}
-      <Dialog
-        open={authOpen}
-        onOpenChange={(open) => {
-          if (!open && !empleado) { router.push("/dashboard/ventas"); return }
-          setAuthOpen(open)
-        }}
-      >
-        <DialogContent className="bg-[#FDFEFE] border-[#D4A017] sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-[#2C3E50] text-lg">Identificacion de Empleado</DialogTitle>
-            <p className="text-sm text-[#7F8C8D]">
-              Ingresa tu codigo y clave para comenzar a registrar la venta.
-            </p>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div>
-              <Label className="text-[#2C3E50] font-medium">Codigo de Empleado</Label>
-              <Input
-                value={empCodigo}
-                onChange={(e) => setEmpCodigo(e.target.value)}
-                placeholder="Ej: VND-2503-A7"
-                className="border-[#D4A017] bg-white text-[#2C3E50] mt-1 font-mono"
-                autoFocus
-              />
-            </div>
-            <div>
-              <Label className="text-[#2C3E50] font-medium">Clave</Label>
-              <Input
-                type="password"
-                value={empClave}
-                onChange={(e) => setEmpClave(e.target.value)}
-                placeholder="Tu clave de acceso"
-                className="border-[#D4A017] bg-white text-[#2C3E50] mt-1"
-                onKeyDown={(e) => { if (e.key === "Enter") autorizarEmpleado() }}
-              />
-            </div>
-            {authError && (
-              <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-md text-sm">
-                {authError}
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => router.push("/dashboard/ventas")}
-              disabled={authLoading}
-              className="border-[#D4A017] text-[#2C3E50] cursor-pointer"
-            >
-              Cancelar
-            </Button>
-            <Button
-              onClick={autorizarEmpleado}
-              disabled={authLoading}
-              className="bg-[#D4A017] hover:bg-[#B8860B] text-white cursor-pointer"
-            >
-              {authLoading ? "Verificando..." : "Continuar"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Encabezado con badge del empleado autorizado */}
-      <div className="mb-6 flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-[#2C3E50]">Nueva Venta</h1>
-          <p className="text-[#7F8C8D]">Registra una venta y el stock se actualizara automaticamente</p>
-        </div>
-        {empleado && (
-          <div className="flex items-center gap-2 bg-[#FCF3CF] border border-[#D4A017]/40 rounded-lg px-3 py-2">
-            <div className="w-2 h-2 rounded-full bg-[#27AE60]" />
-            <div className="text-right">
-              <p className="text-xs text-[#7F8C8D]">Empleado autorizado</p>
-              <p className="text-sm font-semibold text-[#2C3E50]">{empleado.nombre}</p>
-              <p className="text-xs font-mono text-[#7F8C8D]">{empleado.codigo}</p>
-            </div>
-            <button
-              onClick={() => {
-                setEmpleado(null)
-                setEmpCodigo("")
-                setEmpClave("")
-                setAuthError("")
-                setAuthOpen(true)
-              }}
-              className="ml-1 text-[#7F8C8D] hover:text-[#E74C3C] text-xs cursor-pointer"
-              title="Cambiar empleado"
-            >
-              ✕
-            </button>
-          </div>
-        )}
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-[#2C3E50]">Nueva Venta</h1>
+        <p className="text-[#7F8C8D]">Registra una venta y el stock se actualizara automaticamente</p>
       </div>
 
       {error && (
@@ -228,9 +136,8 @@ export default function NuevaVentaPage() {
         </div>
       )}
 
-      {/* UI bloqueada hasta que el empleado se identifique */}
-      <div className={`grid grid-cols-1 lg:grid-cols-2 gap-6 ${!empleado ? "pointer-events-none opacity-40 select-none" : ""}`}>
-        {/* Busqueda de productos */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Product search */}
         <Card className="border-[#D4A017]/30">
           <CardContent className="p-4">
             <h3 className="font-semibold text-[#2C3E50] mb-3">Buscar Producto</h3>
@@ -266,7 +173,7 @@ export default function NuevaVentaPage() {
           </CardContent>
         </Card>
 
-        {/* Carrito */}
+        {/* Cart */}
         <Card className="border-[#D4A017]/30">
           <CardContent className="p-4">
             <h3 className="font-semibold text-[#2C3E50] mb-3">Items de la Venta</h3>
@@ -300,7 +207,9 @@ export default function NuevaVentaPage() {
                               <button
                                 onClick={() => updateQty(item.codigo, item.cantidad - 1)}
                                 className="w-7 h-7 rounded bg-[#FCF3CF] text-[#2C3E50] font-bold hover:bg-[#E9D173] cursor-pointer"
-                              >-</button>
+                              >
+                                -
+                              </button>
                               <Input
                                 type="number"
                                 value={item.cantidad}
@@ -312,7 +221,9 @@ export default function NuevaVentaPage() {
                               <button
                                 onClick={() => updateQty(item.codigo, item.cantidad + 1)}
                                 className="w-7 h-7 rounded bg-[#FCF3CF] text-[#2C3E50] font-bold hover:bg-[#E9D173] cursor-pointer"
-                              >+</button>
+                              >
+                                +
+                              </button>
                             </div>
                           </TableCell>
                           <TableCell className="text-[#2C3E50]">${item.precio_venta.toFixed(2)}</TableCell>
@@ -334,6 +245,7 @@ export default function NuevaVentaPage() {
                   </Table>
                 </div>
 
+                {/* Total and process */}
                 <div className="mt-4 pt-4 border-t border-[#D4A017]/20">
                   <p className="text-sm text-[#7F8C8D] mb-2">{items.length} producto(s)</p>
                   <div className="flex items-center justify-between">
@@ -344,10 +256,7 @@ export default function NuevaVentaPage() {
                       </p>
                     </div>
                     <Button
-                      onClick={() => {
-                        if (items.length === 0) { setError("Agrega al menos un producto"); return }
-                        setConfirmOpen(true)
-                      }}
+                      onClick={solicitarAutorizacion}
                       className="bg-[#27AE60] hover:bg-[#219A52] text-white px-6 py-3 text-base cursor-pointer"
                     >
                       Procesar Venta
@@ -360,33 +269,56 @@ export default function NuevaVentaPage() {
         </Card>
       </div>
 
-      {/* Dialog de confirmacion final — sin pedir credenciales de nuevo */}
-      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+      {/* Dialog de Autorizacion de Empleado */}
+      <Dialog open={authOpen} onOpenChange={setAuthOpen}>
         <DialogContent className="bg-[#FDFEFE] border-[#D4A017] sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-[#2C3E50] text-lg">Confirmar Venta</DialogTitle>
-            <p className="text-sm text-[#7F8C8D]">Revisa el resumen antes de procesar.</p>
+            <DialogTitle className="text-[#2C3E50] text-lg">Autorizacion de Empleado</DialogTitle>
+            <p className="text-sm text-[#7F8C8D]">
+              Ingresa tu codigo y clave para registrar esta venta a tu nombre.
+            </p>
           </DialogHeader>
-          <div className="space-y-3 py-2">
-            <div className="p-3 bg-[#FCF3CF] rounded-md space-y-1">
-              <p className="text-sm font-semibold text-[#2C3E50]">Empleado</p>
-              <p className="text-sm text-[#2C3E50]">{empleado?.nombre}</p>
-              <p className="text-xs font-mono text-[#7F8C8D]">{empleado?.codigo}</p>
+          <div className="space-y-4 py-2">
+            <div>
+              <Label className="text-[#2C3E50] font-medium">Codigo de Empleado</Label>
+              <Input
+                value={empCodigo}
+                onChange={(e) => setEmpCodigo(e.target.value)}
+                placeholder="Ej: EMP001"
+                className="border-[#D4A017] bg-white text-[#2C3E50] mt-1"
+                autoFocus
+              />
             </div>
-            <div className="p-3 bg-[#FCF3CF] rounded-md space-y-1">
-              <p className="text-sm font-semibold text-[#2C3E50]">Resumen</p>
+            <div>
+              <Label className="text-[#2C3E50] font-medium">Clave</Label>
+              <Input
+                type="password"
+                value={empClave}
+                onChange={(e) => setEmpClave(e.target.value)}
+                placeholder="Tu clave de autorizacion"
+                className="border-[#D4A017] bg-white text-[#2C3E50] mt-1"
+                onKeyDown={(e) => { if (e.key === "Enter") procesarVentaConAutorizacion() }}
+              />
+            </div>
+            {authError && (
+              <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-md text-sm">
+                {authError}
+              </div>
+            )}
+            <div className="p-3 bg-[#FCF3CF] rounded-md">
+              <p className="text-sm font-semibold text-[#2C3E50]">Resumen de venta</p>
               <p className="text-sm text-[#7F8C8D]">{items.length} producto(s)</p>
-              <p className="text-2xl font-bold text-[#D4A017]">
+              <p className="text-lg font-bold text-[#D4A017]">
                 Total: ${total.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
               </p>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmOpen(false)} disabled={processing} className="border-[#D4A017] text-[#2C3E50] cursor-pointer">
+            <Button variant="outline" onClick={() => setAuthOpen(false)} disabled={processing} className="border-[#D4A017] text-[#2C3E50] cursor-pointer">
               Cancelar
             </Button>
-            <Button onClick={procesarVenta} disabled={processing} className="bg-[#27AE60] hover:bg-[#219A52] text-white cursor-pointer">
-              {processing ? "Procesando..." : "Confirmar Venta"}
+            <Button onClick={procesarVentaConAutorizacion} disabled={processing} className="bg-[#27AE60] hover:bg-[#219A52] text-white cursor-pointer">
+              {processing ? "Procesando..." : "Autorizar y Vender"}
             </Button>
           </DialogFooter>
         </DialogContent>

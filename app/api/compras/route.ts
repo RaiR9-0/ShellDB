@@ -1,4 +1,5 @@
 import { withAuth, jsonResponse, errorResponse } from "@/lib/api-helpers"
+import { sendCompraAlert, getOwnerEmail } from "@/lib/resend"
 
 export const GET = withAuth(async ({ db }, request) => {
   const { searchParams } = new URL(request.url)
@@ -73,6 +74,21 @@ export const POST = withAuth(async ({ session, db }, request) => {
       usuario: session.user,
     })
   }
+
+  // Alerta de compra (async)
+  getOwnerEmail(session.userDbName).then(email => {
+    if (!email) return
+    sendCompraAlert(
+      email, session.user,
+      String(compraResult.insertedId), sucursal_codigo,
+      proveedor_nombre,
+      items.map((i: { nombre: string; cantidad: number; precio_compra: number }) => ({
+        nombre: i.nombre, cantidad: i.cantidad,
+        precio: i.precio_compra, subtotal: i.precio_compra * i.cantidad,
+      })),
+      total
+    ).catch(() => {})
+  }).catch(() => {})
 
   return jsonResponse({ success: true, compra_id: String(compraResult.insertedId) })
 })

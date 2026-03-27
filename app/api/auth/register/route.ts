@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { getProjectDb } from "@/lib/mongodb"
 import { hashPassword } from "@/lib/auth"
 import { createUserDatabase, setupActivationCodes } from "@/lib/db-setup"
+import { sendWelcomeEmail } from "@/lib/resend"
 
 function escapeRegex(s: string) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
@@ -16,6 +17,12 @@ export async function POST(request: Request) {
 
     if (!username || !password || !passwordConfirm || !email || !activationCode) {
       return NextResponse.json({ error: "Todos los campos son requeridos" }, { status: 400 })
+    }
+
+    // Validar formato de email
+    const emailRe = /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/
+    if (!emailRe.test(email.trim())) {
+      return NextResponse.json({ error: "Correo electrónico inválido. Usa un correo real (ej: ejemplo@gmail.com)" }, { status: 400 })
     }
 
     if (password !== passwordConfirm) {
@@ -45,6 +52,13 @@ export async function POST(request: Request) {
     if (existing) {
       console.log("[v0] User already exists:", username)
       return NextResponse.json({ error: "El usuario ya existe" }, { status: 409 })
+    }
+
+    // Verificar que el email fue verificado previamente
+    const emailLower = email.trim().toLowerCase()
+    const verif = await db.collection("email_verifications").findOne({ email: emailLower, verificado: true })
+    if (!verif) {
+      return NextResponse.json({ error: "Debes verificar tu correo electrónico antes de registrarte" }, { status: 400 })
     }
 
     // Validate activation code
@@ -101,6 +115,16 @@ export async function POST(request: Request) {
       { $set: { used: true, used_by: username.trim(), used_at: new Date() } }
     )
     console.log("[v0] Code marked as used. Registration complete!")
+
+    // Enviar email de bienvenida (no bloquear si falla)
+    try {
+      await sendWelcomeEmail(email.trim(), username.trim(), userDbName)
+    } catch (mailErr) {
+      console.warn("[v0] Welcome email failed:", mailErr)
+    }
+
+    // Limpiar verificación de email usada
+    await db.collection("email_verifications").deleteOne({ email: email.trim().toLowerCase() })
 
     return NextResponse.json({ success: true, message: "Usuario registrado exitosamente" })
   } catch (e: unknown) {

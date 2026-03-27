@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ArrowUpCircle, ArrowDownCircle, Search, RefreshCcw } from "lucide-react"
+import { useDashboard } from "../layout"
 
 interface Movimiento {
   _id: string
@@ -29,29 +30,25 @@ interface Producto {
 }
 
 export default function InventarioPage() {
+  const { sucursal: sucursalCtx, sucursales } = useDashboard()
   const [movimientos, setMovimientos] = useState<Movimiento[]>([])
   const [productos, setProductos] = useState<Producto[]>([])
   const [filtroTipo, setFiltroTipo] = useState("todos")
   const [busqueda, setBusqueda] = useState("")
-  const [sucursal, setSucursal] = useState("")
   const [loading, setLoading] = useState(true)
+
+  // Usar siempre la sucursal del contexto del dashboard (la que el usuario seleccionó en el sidebar)
+  const sucursal = sucursalCtx || "SUC001"
 
   const fetchData = useCallback(async () => {
     setLoading(true)
     try {
-      const suc = sucursal || "SUC001"
       const [movRes, prodRes] = await Promise.all([
-        fetch(`/api/inventario?sucursal=${suc}&tipo=${filtroTipo}`),
-        fetch(`/api/productos?sucursal=${suc}`)
+        fetch(`/api/inventario?sucursal=${sucursal}&tipo=${filtroTipo}`),
+        fetch(`/api/productos?sucursal=${sucursal}`)
       ])
-      if (movRes.ok) {
-        const movData = await movRes.json()
-        setMovimientos(movData)
-      }
-      if (prodRes.ok) {
-        const prodData = await prodRes.json()
-        setProductos(prodData)
-      }
+      if (movRes.ok) setMovimientos(await movRes.json())
+      if (prodRes.ok) setProductos(await prodRes.json())
     } catch (err) {
       console.error("Error fetching inventario:", err)
     } finally {
@@ -59,32 +56,15 @@ export default function InventarioPage() {
     }
   }, [sucursal, filtroTipo])
 
-  useEffect(() => {
-    const getSucursal = async () => {
-      try {
-        const res = await fetch("/api/sucursales")
-        if (res.ok) {
-          const data = await res.json()
-          if (data.length > 0 && !sucursal) {
-            setSucursal(data[0].codigo)
-          }
-        }
-      } catch (err) {
-        console.error(err)
-      }
-    }
-    getSucursal()
-  }, [sucursal])
-
-  useEffect(() => {
-    if (sucursal) fetchData()
-  }, [sucursal, filtroTipo, fetchData])
+  useEffect(() => { fetchData() }, [fetchData])
 
   const productosFiltrados = productos.filter(p => {
     if (!busqueda) return true
     return p.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
       p.codigo.toLowerCase().includes(busqueda.toLowerCase())
   })
+
+  const sucursalNombre = sucursales.find(s => s.codigo === sucursal)?.nombre || sucursal
 
   const getStockColor = (stock: number, minimo: number) => {
     if (stock <= 0) return "text-red-600 font-bold"
@@ -99,15 +79,23 @@ export default function InventarioPage() {
           <h1 className="text-xl font-bold text-white">Inventario</h1>
           <p className="text-sm text-white/80">Control de stock y movimientos</p>
         </div>
-        <Button onClick={fetchData} variant="outline" className="border-white text-white hover:bg-white/20 cursor-pointer">
-          <RefreshCcw className="w-4 h-4 mr-2" /> Actualizar
-        </Button>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 bg-white/20 rounded-full px-3 py-1.5">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+            </svg>
+            <span className="text-white text-xs font-semibold">{sucursalNombre}</span>
+          </div>
+          <Button onClick={fetchData} variant="outline" className="border-white text-white hover:bg-white/20 cursor-pointer">
+            <RefreshCcw className="w-4 h-4 mr-2" /> Actualizar
+          </Button>
+        </div>
       </div>
 
-      {/* Stock actual por producto */}
+      {/* Stock actual */}
       <Card className="border-[#D4A017]">
         <CardHeader className="bg-[#B8860B] rounded-t-lg">
-          <CardTitle className="text-white text-lg">Stock Actual - Sucursal {sucursal}</CardTitle>
+          <CardTitle className="text-white text-lg">Stock Actual — {sucursalNombre}</CardTitle>
         </CardHeader>
         <CardContent className="p-4">
           <div className="flex items-center gap-4 mb-4">
@@ -120,6 +108,9 @@ export default function InventarioPage() {
                 className="pl-10 border-[#D4A017] focus-visible:ring-[#B8860B]"
               />
             </div>
+            <p className="text-sm text-[#6B7280]">
+              Cambia la sucursal desde el selector del menú lateral
+            </p>
           </div>
 
           <div className="rounded-md border border-[#D4A017] overflow-hidden">
@@ -129,23 +120,15 @@ export default function InventarioPage() {
                   <TableHead className="text-[#2C3E50] font-bold">Codigo</TableHead>
                   <TableHead className="text-[#2C3E50] font-bold">Producto</TableHead>
                   <TableHead className="text-[#2C3E50] font-bold text-center">Stock Actual</TableHead>
-                  <TableHead className="text-[#2C3E50] font-bold text-center">Stock Minimo</TableHead>
+                  <TableHead className="text-[#2C3E50] font-bold text-center">Stock Mínimo</TableHead>
                   <TableHead className="text-[#2C3E50] font-bold text-center">Estado</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                      Cargando inventario...
-                    </TableCell>
-                  </TableRow>
+                  <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Cargando inventario...</TableCell></TableRow>
                 ) : productosFiltrados.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                      No se encontraron productos
-                    </TableCell>
-                  </TableRow>
+                  <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No se encontraron productos</TableCell></TableRow>
                 ) : (
                   productosFiltrados.map((prod, i) => {
                     const stock = prod.stock_por_sucursal?.[sucursal] ?? 0
@@ -154,23 +137,15 @@ export default function InventarioPage() {
                       <TableRow key={prod.codigo} className={i % 2 === 0 ? "bg-white" : "bg-[#FDF5E6]"}>
                         <TableCell className="font-mono text-sm">{prod.codigo}</TableCell>
                         <TableCell className="font-medium">{prod.nombre}</TableCell>
-                        <TableCell className={`text-center ${getStockColor(stock, minimo)}`}>
-                          {stock}
-                        </TableCell>
+                        <TableCell className={`text-center text-lg ${getStockColor(stock, minimo)}`}>{stock}</TableCell>
                         <TableCell className="text-center">{minimo}</TableCell>
                         <TableCell className="text-center">
                           {stock <= 0 ? (
-                            <span className="px-2 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700">
-                              Agotado
-                            </span>
+                            <span className="px-2 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700">Agotado</span>
                           ) : stock <= minimo ? (
-                            <span className="px-2 py-1 rounded-full text-xs font-semibold bg-orange-100 text-orange-700">
-                              Bajo Stock
-                            </span>
+                            <span className="px-2 py-1 rounded-full text-xs font-semibold bg-orange-100 text-orange-700">Bajo Stock</span>
                           ) : (
-                            <span className="px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">
-                              Normal
-                            </span>
+                            <span className="px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">Normal</span>
                           )}
                         </TableCell>
                       </TableRow>
@@ -187,7 +162,7 @@ export default function InventarioPage() {
       <Card className="border-[#D4A017]">
         <CardHeader className="bg-[#DAA520] rounded-t-lg">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-white text-lg">Movimientos de Inventario</CardTitle>
+            <CardTitle className="text-white text-lg">Movimientos — {sucursalNombre}</CardTitle>
             <Select value={filtroTipo} onValueChange={setFiltroTipo}>
               <SelectTrigger className="w-[160px] bg-white text-[#2C3E50] border-white">
                 <SelectValue placeholder="Filtrar tipo" />
@@ -215,48 +190,26 @@ export default function InventarioPage() {
               </TableHeader>
               <TableBody>
                 {loading ? (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                      Cargando movimientos...
-                    </TableCell>
-                  </TableRow>
+                  <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Cargando movimientos...</TableCell></TableRow>
                 ) : movimientos.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                      No hay movimientos registrados
-                    </TableCell>
-                  </TableRow>
+                  <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">No hay movimientos registrados para esta sucursal</TableCell></TableRow>
                 ) : (
                   movimientos.map((mov, i) => (
                     <TableRow key={mov._id} className={i % 2 === 0 ? "bg-white" : "bg-[#FDF5E6]"}>
                       <TableCell>
                         <div className="flex items-center gap-1">
-                          {mov.tipo === "ENTRADA" ? (
-                            <ArrowUpCircle className="w-4 h-4 text-green-600" />
-                          ) : (
-                            <ArrowDownCircle className="w-4 h-4 text-red-500" />
-                          )}
-                          <span className={mov.tipo === "ENTRADA" ? "text-green-600 font-semibold" : "text-red-500 font-semibold"}>
-                            {mov.tipo}
-                          </span>
+                          {mov.tipo === "ENTRADA" ? <ArrowUpCircle className="w-4 h-4 text-green-600" /> : <ArrowDownCircle className="w-4 h-4 text-red-500" />}
+                          <span className={mov.tipo === "ENTRADA" ? "text-green-600 font-semibold" : "text-red-500 font-semibold"}>{mov.tipo}</span>
                         </div>
                       </TableCell>
                       <TableCell>
                         <span className="font-mono text-xs">{mov.producto_codigo}</span>
-                        {mov.producto_nombre && (
-                          <span className="ml-2 text-sm">{mov.producto_nombre}</span>
-                        )}
+                        {mov.producto_nombre && <span className="ml-2 text-sm">{mov.producto_nombre}</span>}
                       </TableCell>
-                      <TableCell className="text-center font-bold">
-                        {mov.tipo === "ENTRADA" ? "+" : "-"}{mov.cantidad}
-                      </TableCell>
+                      <TableCell className="text-center font-bold">{mov.tipo === "ENTRADA" ? "+" : "-"}{mov.cantidad}</TableCell>
                       <TableCell>{mov.motivo}</TableCell>
                       <TableCell className="text-xs text-muted-foreground">{mov.referencia || "-"}</TableCell>
-                      <TableCell className="text-sm">
-                        {new Date(mov.fecha).toLocaleString("es-MX", {
-                          dateStyle: "short", timeStyle: "short"
-                        })}
-                      </TableCell>
+                      <TableCell className="text-sm">{new Date(mov.fecha).toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short" })}</TableCell>
                     </TableRow>
                   ))
                 )}

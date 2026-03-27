@@ -27,7 +27,7 @@ export default function VentasPage() {
           <CrudTable data={data} columns={columns} isLoading={isLoading} emptyMessage="No hay ventas registradas" onDetail={(v) => verDetalle(v._id)} />
         </CardContent>
       </Card>
-      <HistorialDetailDialog open={detailOpen} onOpenChange={setDetailOpen} loading={loadingDetail} title="Detalle de Venta" id={detail?._id.slice(-8)} metadata={detail ? [{ label: "Fecha", value: new Date(detail.fecha).toLocaleString("es-MX") }, { label: "Usuario", value: detail.usuario }, { label: "Sucursal", value: detail.sucursal_codigo }] : []} detalles={detail?.detalles} total={detail?.total} />
+      <HistorialDetailDialog open={detailOpen} onOpenChange={setDetailOpen} loading={loadingDetail} title="Detalle de Venta" id={detail?._id?.slice(-8)} metadata={detail ? [{ label: "Fecha", value: new Date(detail.fecha).toLocaleString("es-MX") }, { label: "Usuario", value: detail.usuario }, { label: "Sucursal", value: detail.sucursal_codigo }] : []} detalles={detail?.detalles} total={detail?.total} />
     </div>
   )
 }

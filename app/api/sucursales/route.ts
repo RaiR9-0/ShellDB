@@ -1,4 +1,5 @@
-import { withAuth, jsonResponse, successResponse, getList, insertDoc } from "@/lib/api-helpers"
+import { withAuth, jsonResponse, successResponse, errorResponse, getList } from "@/lib/api-helpers"
+import { getProjectDb } from "@/lib/mongodb"
 
 export const GET = withAuth(async ({ db }) => {
   const sucursales = await getList(db, "sucursales", {
@@ -14,14 +15,31 @@ export const GET = withAuth(async ({ db }) => {
   return jsonResponse(sucursales)
 })
 
-export const POST = withAuth(async ({ db }, request) => {
+export const POST = withAuth(async ({ db, session }, request) => {
   const body = await request.json()
-  await insertDoc(db, "sucursales", {
-    codigo: body.codigo,
-    nombre: body.nombre,
+
+  // ─── Verificar límite de sucursales configurado por superadmin ──────────────
+  const projectDb = await getProjectDb()
+  const userConfig = await projectDb.collection("users").findOne({ database_name: session.userDbName })
+
+  if (userConfig?.max_sucursales != null) {
+    const limite = Number(userConfig.max_sucursales)
+    const actuales = await db.collection("sucursales").countDocuments({ activa: true })
+    if (actuales >= limite) {
+      return errorResponse(
+        `Límite de sucursales alcanzado. Tu plan permite máximo ${limite} sucursal${limite === 1 ? "" : "es"}.`,
+        403
+      )
+    }
+  }
+  // ───────────────────────────────────────────────────────────────────────────
+
+  await db.collection("sucursales").insertOne({
+    codigo:    body.codigo,
+    nombre:    body.nombre,
     direccion: body.direccion || "",
-    telefono: body.telefono || "",
-    activa: true,
+    telefono:  body.telefono  || "",
+    activa:    true,
   })
   return successResponse()
 })

@@ -1,5 +1,6 @@
 "use client"
 
+import React from "react"
 import { useState, useCallback } from "react"
 import useSWR, { mutate } from "swr"
 import { Button } from "@/components/ui/button"
@@ -83,20 +84,24 @@ interface PageHeaderProps {
   subtitle?: string
   actionLabel?: string
   onAction?: () => void
+  actionExtra?: React.ReactNode
 }
 
-export function PageHeader({ title, subtitle, actionLabel, onAction }: PageHeaderProps) {
+export function PageHeader({ title, subtitle, actionLabel, onAction, actionExtra }: PageHeaderProps) {
   return (
     <div className={styles.header.wrapper}>
       <div>
         <h1 className={styles.header.title}>{title}</h1>
         {subtitle && <p className={styles.header.subtitle}>{subtitle}</p>}
       </div>
-      {actionLabel && onAction && (
-        <Button onClick={onAction} className={styles.button.success}>
-          + {actionLabel}
-        </Button>
-      )}
+      <div className="flex items-center gap-2">
+        {actionExtra}
+        {actionLabel && onAction && (
+          <Button onClick={onAction} className={styles.button.success}>
+            + {actionLabel}
+          </Button>
+        )}
+      </div>
     </div>
   )
 }

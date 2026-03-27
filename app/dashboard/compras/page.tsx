@@ -27,7 +27,7 @@ export default function ComprasPage() {
           <CrudTable data={data} columns={columns} isLoading={isLoading} emptyMessage="No hay compras registradas" onDetail={(c) => verDetalle(c._id)} />
         </CardContent>
       </Card>
-      <HistorialDetailDialog open={detailOpen} onOpenChange={setDetailOpen} loading={loadingDetail} title="Detalle de Compra" id={detail?._id.slice(-8)} metadata={detail ? [{ label: "Fecha", value: new Date(detail.fecha).toLocaleString("es-MX") }, { label: "Proveedor", value: detail.proveedor_nombre }, { label: "Sucursal", value: detail.sucursal_codigo }] : []} detalles={detail?.detalles} total={detail?.total} />
+      <HistorialDetailDialog open={detailOpen} onOpenChange={setDetailOpen} loading={loadingDetail} title="Detalle de Compra" id={detail?._id?.slice(-8)} metadata={detail ? [{ label: "Fecha", value: new Date(detail.fecha).toLocaleString("es-MX") }, { label: "Proveedor", value: detail.proveedor_nombre }, { label: "Sucursal", value: detail.sucursal_codigo }] : []} detalles={detail?.detalles} total={detail?.total} />
     </div>
   )
 }
